@@ -1,0 +1,10 @@
+{{- if .Values.serviceAccount.create }}
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "chart.fullname" . }}-role
+rules:
+  - apiGroups: [""]            
+    resources: ["pods", "configmaps", "services", "secrets"]
+    verbs: ["get"]
+{{- end }}

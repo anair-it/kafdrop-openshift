@@ -1,0 +1,22 @@
+{{- if .Values.serviceMesh.route -}}
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: {{ include "chart.fullname" . }}-ingress
+  labels:
+    app.kubernetes.io/name: {{ include "chart.name" . }}
+    helm.sh/chart: {{ include "chart.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  hosts:
+    - {{ .Values.hostname }}
+  gateways:
+    - {{ include "chart.fullname" . }}-gateway
+  http:
+  - route:
+    - destination:
+        host: {{ include "chart.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+        port:
+          number: {{.Values.service.port}}
+{{- end }}

@@ -1,0 +1,28 @@
+{{- if .Values.route.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+{{- with .Values.route.annotations }}
+  annotations:
+    haproxy.router.openshift.io/balance: roundrobin
+    haproxy.router.openshift.io/disable_cookies: "TRUE"
+{{ toYaml . | indent 4 }}
+{{- end }}
+  labels:
+    app.kubernetes.io/name: {{ include "chart.name" . }}
+    helm.sh/chart: {{ include "chart.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: {{ include "chart.fullname" . }}
+spec:
+  host: {{ .Values.hostname }}
+  path: /
+  to:
+    kind: Service
+    name: {{ include "chart.fullname" . }}
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+{{- end }}

@@ -1,0 +1,33 @@
+{{- if .Values.serviceMesh.route  -}}
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: {{ include "chart.fullname" . }}-gateway
+  labels:
+    app.kubernetes.io/name: {{ include "chart.name" . }}
+    helm.sh/chart: {{ include "chart.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  selector:
+    istio: ingressgateway # use Istio default gateway implementation
+  servers:
+    - hosts:
+      - {{ .Values.hostname }}
+      port:
+        name: http
+        number: 8080
+        protocol: HTTP
+      tls:
+        httpsRedirect: true
+    - hosts:
+      - {{ .Values.hostname }}
+      port:
+        name: https
+        number: 443
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        privateKey: /etc/istio/ingressgateway-certs/tls.key
+        serverCertificate: /etc/istio/ingressgateway-certs/tls.crt
+{{- end }}

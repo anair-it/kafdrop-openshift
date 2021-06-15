@@ -1,0 +1,7 @@
+apiVersion: v1
+appVersion: "3.x"
+description: A Helm chart for Kafdrop in RedHat Openshift
+name: kafdrop
+version: 0.1.0
+maintainers:
+  - name: Anoop Nair

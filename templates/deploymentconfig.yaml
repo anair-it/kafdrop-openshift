@@ -1,0 +1,141 @@
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  name: {{ include "chart.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "chart.name" . }}
+    helm.sh/chart: {{ include "chart.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    app.kubernetes.io/name: {{ include "chart.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app: {{ include "chart.name" . }}
+    deploymentConfig: {{ include "chart.fullname" . }}
+  strategy:
+    type: {{ .Values.deployment.strategy }}
+  {{- with .Values.deployment.rollingParams }}
+    rollingParams:
+      {{- toYaml . | nindent 6 }}
+   {{- end }}
+    resources:
+      {{- toYaml .Values.resources | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- if not .Values.serviceMesh.sidecar }}
+        maistra.io/expose-route: "true"
+        {{- end }}
+        app.kubernetes.io/name: {{ include "chart.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app: {{ include "chart.name" . }}
+        deploymentConfig: {{ include "chart.fullname" . }}
+
+      {{- if .Values.serviceMesh.sidecar }}
+      annotations:
+        sidecar.istio.io/inject: "true"
+      {{- end }}
+      name: {{ include "chart.fullname" . }}
+    spec:
+      serviceAccountName: {{ include "chart.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+          - name: KAFKA_BROKERCONNECT
+            valueFrom:
+              secretKeyRef:
+                key: KAFKA_BOOTSTRAP_SERVERS
+                name: kafdrop-kafka
+          - name: KAFKA_PROPERTIES_FILE
+            valueFrom:
+              secretKeyRef:
+                key: KAFKA_PROPERTIES_FILE_PATH
+                name: kafdrop-kafka
+          - name: KAFKA_SECURITYPROTOCOL
+            valueFrom:
+              secretKeyRef:
+                key: KAFKA_SECURITY_PROTOCOL
+                name: kafdrop-kafka
+          - name: SCHEMAREGISTRY_CONNECT
+            valueFrom:
+              secretKeyRef:
+                key: KAFKA_SCHEMA_REGISTRY_URL
+                name: kafdrop-kafka
+          - name: SCHEMAREGISTRY_AUTH
+            valueFrom:
+              secretKeyRef:
+                key: KAFKA_SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO
+                name: kafdrop-kafka
+          - name: JVM_OPTS
+            value: "{{ .Values.jvm.opts }}"
+          - name: JMX_PORT
+            value: "{{ .Values.jmx.port }}"
+          - name: HOST
+            value: "{{ .Values.host }}"
+          - name: SERVER_SERVLET_CONTEXTPATH
+            value: "{{ .Values.server.servlet.contextPath | trimSuffix "/" }}"
+          - name: SERVER_PORT
+            value: "{{ .Values.server.port }}"
+          - name: CMD_ARGS
+{{- if .Values.mountProtoDesc.enabled }}
+            value: "--message.format=PROTOBUF --protobufdesc.directory=/protodesc/ {{ .Values.cmdArgs }}"
+{{- else }}
+            value: "{{ .Values.cmdArgs }}"
+{{- end }}
+          ports:
+            - name: http
+              containerPort: 9000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: "{{ .Values.server.servlet.contextPath | trimSuffix "/" }}/actuator/health"
+              port: http
+            initialDelaySeconds: 180
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: "{{ .Values.server.servlet.contextPath | trimSuffix "/" }}/actuator/health"
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 10
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          volumeMounts:
+            - name: kafka-props
+              mountPath: /tmp/kafka-props
+              readOnly: true
+          {{- if .Values.mountProtoDesc.enabled }}
+            - mountPath: /protodesc/
+              name: proto-desc
+          {{- end }}    
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+      volumes:
+        - name: kafka-props
+          secret:
+            secretName: kafdrop-kafka
+            items:
+              - key: KAFKA_SASL_PROPERTIES
+                path: kafka.properties
+{{- if .Values.mountProtoDesc.enabled }}
+        - name: proto-desc
+          hostPath:
+            path: {{ .Values.mountProtoDesc.hostPath }}
+            type: Directory 
+{{- end }}
